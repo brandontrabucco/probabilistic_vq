@@ -2,6 +2,7 @@
 
 
 from probabilistic_vq import get_logits
+from probabilistic_vq import sample_softly_from_logits
 from probabilistic_vq import sample_randomly_from_logits
 from probabilistic_vq import sample_best_from_logits
 import tensorflow as tf
@@ -33,9 +34,9 @@ class VectorQuantizer(tf.keras.layers.Layer):
         logits: float tensor with shape [batch_dim, num_codes]
         """
         if training:
-            return sample_randomly_from_logits(logits, self.embeddings)
+            return sample_softly_from_logits(logits, self.embeddings)
         else:
-            return sample_best_from_logits(logits, self.embeddings)
+            return sample_softly_from_logits(logits, self.embeddings)
         
     def call(self, keys, **kwargs):
         """Forward pass using probabilistic vector quantization

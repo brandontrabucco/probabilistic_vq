@@ -1,4 +1,5 @@
 checkpoint
+.ipynb_checkpoints
 step
 events.out.tfevents.**
 *.egg-info**
