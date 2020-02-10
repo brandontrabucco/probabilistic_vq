@@ -68,7 +68,26 @@ def get_logits(keys,
         keys[..., tf.newaxis, :], embeddings)
 
 
-def sample_softly_from_logits(logits, embeddings):
+def sample_sharply(logits, embeddings):
+    """Samples from embeddings using logits as a pre-softmax distribution
+    by weighting each of the elements using attention and stopping
+    gradients into the logits
+
+    Arguments:
+    logits: float32 tensor with shape [batch_dim, num_codes]
+    embeddings: float32 tensor with shape [num_codes, num_channels]
+
+    Returns:
+    float32 tensor with shape [batch_dim, num_channels]
+    """
+    logits = tf.stop_gradient(logits)
+    while len(embeddings.shape) < len(logits.shape) + 1:
+        embeddings = embeddings[tf.newaxis]
+    return tf.reduce_sum(
+        tf.math.softmax(logits)[..., tf.newaxis] * embeddings, axis=(-2))
+
+
+def sample_softly(logits, embeddings):
     """Samples from embeddings using logits as a pre-softmax distribution
     by weighting each of the elements using attention
 
@@ -85,7 +104,7 @@ def sample_softly_from_logits(logits, embeddings):
         tf.math.softmax(logits)[..., tf.newaxis] * embeddings, axis=(-2))
 
 
-def sample_randomly_from_logits(logits, embeddings):
+def sample_randomly(logits, embeddings):
     """Samples from embeddings using logits as a pre-softmax distribution
     by random picking an index
     
@@ -99,10 +118,10 @@ def sample_randomly_from_logits(logits, embeddings):
     s = tf.shape(logits)[:-1]
     a = tf.reshape(logits, [tf.reduce_prod(s), tf.shape(logits)[-1]])
     a = tf.reshape(tf.random.categorical(a, 1), s)
-    return tf.gather(embeddings, a, axis=0)
+    return tf.nn.embedding_lookup(embeddings, a)
 
 
-def sample_best_from_logits(logits, embeddings):
+def sample_best(logits, embeddings):
     """Samples from embeddings using logits as a pre-softmax distribution
     by picking the best index
     
@@ -114,7 +133,7 @@ def sample_best_from_logits(logits, embeddings):
     float32 tensor with shape [batch_dim, num_channels]
     """
     a = tf.math.argmax(logits, axis=(-1), output_type=tf.int32)
-    return tf.gather(embeddings, a, axis=0)
+    return tf.nn.embedding_lookup(embeddings, a)
 
 
 def kl_divergence(log_probs_a, log_probs_b):
