@@ -2,10 +2,8 @@
 
 
 from probabilistic_vq import get_logits
-from probabilistic_vq import sample_from_logits
+from probabilistic_vq import sample_randomly_from_logits
 from probabilistic_vq import sample_best_from_logits
-from probabilistic_vq import pass_through_gradients
-from probabilistic_vq import get_kl_divergence
 import tensorflow as tf
 
 
@@ -22,21 +20,28 @@ class VectorQuantizer(tf.keras.layers.Layer):
         tf.keras.layers.Layer.__init__(self, **kwargs)
         self.num_codes = num_codes
         self.num_channels = num_channels
-        init = tf.keras.initializers.GlorotNormal()([num_codes, num_channels])
-        self.embeddings = tf.Variable(init, trainable=True)
+
+        initializer = tf.keras.initializers.GlorotNormal()
+        self.embeddings = tf.Variable(
+            initializer([num_codes, num_channels]), trainable=True)
+
+    def sample(self, logits, training=True, **kwargs):
+        """Forward pass using probabilistic vector quantization
+        in place of standard vector quantization
+
+        Arguments:
+        logits: float tensor with shape [batch_dim, num_codes]
+        """
+        if training:
+            return sample_randomly_from_logits(logits, self.embeddings)
+        else:
+            return sample_best_from_logits(logits, self.embeddings)
         
-    def call(self, keys, training=True, **kwargs):
+    def call(self, keys, **kwargs):
         """Forward pass using probabilistic vector quantization
         in place of standard vector quantization
         
         Arguments:
         keys: float tensor with shape [batch_dim, num_channels]
         """
-        logits = get_logits(keys, self.embeddings)
-        if training:
-            samples = sample_from_logits(logits, self.embeddings)
-        else:
-            samples = sample_best_from_logits(logits, self.embeddings)
-        samples = pass_through_gradients(keys, samples)
-        log_probs = tf.math.log_softmax(logits, axis=(-1))
-        return samples, log_probs
+        return get_logits(keys, self.embeddings)

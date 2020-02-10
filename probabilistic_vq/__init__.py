@@ -5,7 +5,8 @@ import tensorflow as tf
 
 
 def get_logits(keys, embeddings):
-    """Returns logits representing a pre-softmax distribution over the latent codes.
+    """Returns logits representing a pre-softmax distribution over
+    the latent codes
     
     Argruments:
     keys: float32 tensor with shape [batch_dim, num_channels]
@@ -14,11 +15,13 @@ def get_logits(keys, embeddings):
     Returns:
     float32 tensor with shape [batch_dim, num_codes]
     """
-    return tf.reduce_mean(
-        keys[..., tf.newaxis, :] - embeddings[..., :, tf.newaxis], axis=2)
+    keys = keys[..., tf.newaxis, :]
+    while len(embeddings.shape) < len(keys.shape):
+        embeddings = embeddings[tf.newaxis]
+    return tf.reduce_mean(keys - embeddings, axis=(-1))
 
 
-def sample_from_logits(logits, embeddings):
+def sample_randomly_from_logits(logits, embeddings):
     """Samples from embeddings using logits as a pre-softmax distribution
     
     Argruments:
@@ -28,8 +31,10 @@ def sample_from_logits(logits, embeddings):
     Returns:
     float32 tensor with shape [batch_dim, num_channels]
     """
-    return tf.gather(embeddings, tf.squeeze(
-        tf.random.categorical(logits, 1), (-1)), axis=0)
+    s = tf.shape(logits)[:-1]
+    a = tf.reshape(logits, [tf.reduce_prod(s), tf.shape(logits)[-1]])
+    a = tf.reshape(tf.random.categorical(a, 1), s)
+    return tf.gather(embeddings, a, axis=0)
 
 
 def sample_best_from_logits(logits, embeddings):
@@ -42,24 +47,11 @@ def sample_best_from_logits(logits, embeddings):
     Returns:
     float32 tensor with shape [batch_dim, num_channels]
     """
-    return tf.gather(embeddings, tf.squeeze(
-        tf.math.argmax(logits, axis=1, output_type=tf.int32), (-1)), axis=0)
+    a = tf.math.argmax(logits, axis=(-1), output_type=tf.int32)
+    return tf.gather(embeddings, a, axis=0)
 
 
-def pass_through_gradients(keys, samples):
-    """Passes gradients through discrete latent embeddings.
-    
-    Argruments:
-    keys: float32 tensor with shape [batch_dim, num_channels]
-    samples: float32 tensor with shape [batch_dim, num_channels]
-        
-    Returns:
-    float32 tensor with shape [batch_dim, num_channels]
-    """
-    return keys + tf.stop_gradient(samples - keys)
-
-
-def get_kl_divergence(log_probs_a, log_probs_b):
+def kl_divergence(log_probs_a, log_probs_b):
     """Returns the kl divergence with the uniform distribution
     
     Argruments:
@@ -69,5 +61,18 @@ def get_kl_divergence(log_probs_a, log_probs_b):
     Returns:
     float32 tensor with shape [batch_dim]
     """
-    log_probs_ratio = log_probs_a - log_probs_b
-    return tf.reduce_sum(tf.exp(log_probs_a) * log_probs_ratio, axis=(-1))
+    ratio = log_probs_a - log_probs_b
+    return tf.reduce_sum(tf.exp(log_probs_a) * ratio, axis=(-1))
+
+
+def pass_through(keys, samples):
+    """Passes gradients through discrete latent embeddings.
+
+    Argruments:
+    keys: float32 tensor with shape [batch_dim, num_channels]
+    samples: float32 tensor with shape [batch_dim, num_channels]
+
+    Returns:
+    float32 tensor with shape [batch_dim, num_channels]
+    """
+    return keys - tf.stop_gradient(keys) + samples
